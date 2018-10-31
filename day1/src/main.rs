@@ -1,67 +1,63 @@
 use std::collections::HashSet;
-use std::io::prelude::*;
-use std::io::BufReader;
-use std::fs::File;
-use std::str::FromStr;
-
-extern crate itertools;
-use itertools::Itertools;
-use itertools::FoldWhile::{Continue, Done};
+use std::fs;
 
 fn main() {
-	let f = File::open("day1.txt").unwrap();
-	let mut reader = BufReader::new(f);
-	let mut buffer = String::new();
+    let directions = [(0, 1), (1, 0), (0, -1), (-1, 0)];
 
-	// read a line into buffer
-	reader.read_line(&mut buffer);
-	let buffer = buffer.trim_right();
-	let moves: Vec<&str> = buffer.split(", ").collect();
-	let direction: i32 = 0;
-	let directions = [(0,1), (1,0), (0,-1), (-1,0)];
-	let position = (0, 0);
-	let mut set = HashSet::new();
-	
-	set.insert(position);
+    let buffer = fs::read_to_string("day1.txt").unwrap();
 
-	let (final_position, _) = match moves.iter().fold_while((position, direction), |acc, &x| {
-		let new_direction = if x.starts_with('R') {
-			(((acc.1 + 1) % 4) + 4) %4
-		} else {
-			(((acc.1 - 1) % 4) + 4) %4
-		};
-		let distance = i32::from_str(&(x[1..])).unwrap();
-		let mut new_x:i32 = (acc.0).0;
-		let mut new_y:i32 = (acc.0).1;
-		for _ in 0..distance {
-			new_x += directions[new_direction as usize].0;
-			new_y += directions[new_direction as usize].1;
-			let new_position = (new_x, new_y);
-			if set.contains(&new_position) {
-				return Done((new_position, new_direction));
-			}
-			set.insert(new_position);
-		}
-		let new_position = (new_x, new_y);
-		Continue((new_position, new_direction))
-	}) {
-		Continue(t) => t,
-		Done(t) => {
-			println!("Done");
-			t
-		},
-	};
+    let direction = 0i32;
+    let position = (0, 0);
+    let mut set = HashSet::new();
+    set.insert((0, 0));
 
-	println!("{}, {}", final_position.0, final_position.1);
-	println!("{}", final_position.0.abs() + final_position.1.abs());
-}
+    let final_position = buffer
+        // tokenise
+        .split(",")
+        .map(|section| section.trim())
+        // parse tokens
+        .map(|section| {
+            let (turn, distance) = section.split_at(1);
+            let turn = match turn {
+                "R" => 1,
+                "L" => -1,
+                _ => unreachable!(),
+            };
+            let distance: i32 = distance.parse().unwrap();
+            (turn, distance)
+        })
+        // find all visited points
+        .scan((position, direction), |state, (turn, distance)| {
+            let &mut (ref mut position, ref mut direction) = state;
+            *direction = (((*direction + turn) % 4) + 4) % 4;
 
-fn direction_to_char(direction: i32) -> char {
-	match direction {
-		0 => 'N',
-		1 => 'E',
-		2 => 'S',
-		3 => 'W',
-		_ => 'G',
-	}
+            let direction = directions[*direction as usize];
+
+            let output = Some((*position, distance, direction));
+
+            // adjust *position to be the final value
+            position.0 += distance * direction.0;
+            position.1 += distance * direction.1;
+
+            output
+        }).flat_map(|(position, distance, direction)| {
+            (0..distance).map(|x| x + 1).map(move |distance| {
+                (
+                    position.0 + distance * direction.0,
+                    position.1 + distance * direction.1,
+                )
+            })
+        })
+        // find duplicates
+        .skip_while(|&position| if set.contains(&position) {
+            false
+        } else {
+            set.insert(position);
+            true
+        })
+        .next()
+        .expect("Did not find a duplicate");
+
+    println!("{}, {}", final_position.0, final_position.1);
+    println!("{}", final_position.0.abs() + final_position.1.abs());
 }
